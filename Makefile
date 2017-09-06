@@ -10,12 +10,12 @@ mypy:
 test_srcs := $(wildcard tests/test_*.py)
 
 test: lint mypy
-	PYTHONWARNINGS=ignore:ResourceWarning coverage run --source=dss -m unittest discover tests -v
+	PYTHONWARNINGS=ignore:ResourceWarning coverage run --source=dss -m unittest discover tests --buffer -v
 
 fast_test: lint mypy $(test_srcs)
 
 $(test_srcs): %.py :
-	PYTHONWARNINGS=ignore:ResourceWarning python -m unittest $@
+	PYTHONWARNINGS=ignore:ResourceWarning python -m unittest --buffer -v $@
 
 deploy:
 	$(MAKE) -C chalice deploy
