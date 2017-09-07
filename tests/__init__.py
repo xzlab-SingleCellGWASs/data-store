@@ -23,7 +23,7 @@ class TimeLoggingTestResult(TextTestResult):
         return self.test_timings
 
 class TimeLoggingTestRunner(unittest.TextTestRunner):
-    slow_test_threshold = 10
+    slow_test_threshold = 8.0
     def __init__(self, *args, **kwargs):
         return super().__init__(resultclass=TimeLoggingTestResult, *args, **kwargs)
 
