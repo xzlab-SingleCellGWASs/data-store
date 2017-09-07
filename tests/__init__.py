@@ -40,8 +40,8 @@ class DSSTestProgram(unittest.TestProgram):
         self.testRunner = TimeLoggingTestRunner
         unittest.TestProgram._runTests(self)
 
-unittest.TestProgram._runTests = unittest.TestProgram.runTests
-unittest.TestProgram.runTests = DSSTestProgram.runTests
+unittest.TestProgram._runTests = unittest.TestProgram.runTests  # type: ignore
+unittest.TestProgram.runTests = DSSTestProgram.runTests  # type: ignore
 
 def get_version():
     return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H%M%S.%fZ")
