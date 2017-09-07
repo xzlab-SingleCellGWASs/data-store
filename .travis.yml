@@ -31,7 +31,7 @@ install:
 - export PATH=$(pwd)/make4/usr/bin:$PATH
 script:
 - set -eo pipefail
-- make -j1 fast_test
+- make -j4 -O fast_test
 - if [[ $TRAVIS_EVENT_TYPE == cron ]]; then echo "FIXME (sampierson) insert integration test entry point here"; fi
 after_success:
 - bash <(curl -s https://codecov.io/bash)
