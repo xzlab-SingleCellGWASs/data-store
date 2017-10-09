@@ -34,17 +34,17 @@ class IndexSuffix:
     '''Creates a test specific index when in test config.'''
     __suf__ = ''  # index suffix to use
 
-    @property
-    def name(self):
-        return self.__suf__
+    @classmethod
+    def get_name(cls):
+        return cls.__suf__
 
-    @name.setter
-    def name(self, value: str):
-        self.__suf__ = value.lower()
+    @classmethod
+    def set_name(cls, value):
+        cls.__suf__ = value.lower()
 
     @classmethod
     def reset(cls):
-        cls.name = ''
+        cls.__suf__ = ''
 
 class Config:
     _S3_BUCKET = None  # type: typing.Optional[str]
@@ -150,7 +150,7 @@ class Config:
         deployment_stage = os.environ["DSS_DEPLOYMENT_STAGE"]
         index = f"dss-{index_type.name}-{replica.name}-{deployment_stage}"
         if Config._CURRENT_CONFIG == DeploymentStage.TEST:
-            index = f"{index}-{IndexSuffix.name}"
+            index = f"{index}-{IndexSuffix.get_name()}"
         return index
 
     @staticmethod

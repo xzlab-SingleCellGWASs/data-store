@@ -48,7 +48,7 @@ class TestSubscriptionsBase(DSSAssertMixin):
 
         logger.debug("Setting up Elasticsearch")
         es_client = ElasticsearchClient.get(logger)
-        elasticsearch_delete_index(f"*{IndexSuffix.name}")
+        elasticsearch_delete_index(f"*{IndexSuffix.get_name()}")
         index_mapping = {  # Need to make a mapping for the percolator type before we add any.
             "mappings": {
                 dss.ESDocType.query.name: {

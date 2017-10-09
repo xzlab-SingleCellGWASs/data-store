@@ -45,21 +45,22 @@ start_verbose_logging()
 #   5. Verify the structure and content of the index document
 #
 
-class ESInfo:
-    server = None
+# class ESInfo:
+#     server = None
 
 def setUpModule():
-    IndexSuffix.name = __name__.rsplit('.', 1)[-1]
+    IndexSuffix.set_name(__name__.rsplit('.', 1)[-1])
     HTTPInfo.port = findOpenPort()
     HTTPInfo.server = HTTPServer((HTTPInfo.address, HTTPInfo.port), PostTestHandler)
     HTTPInfo.thread = threading.Thread(target=HTTPInfo.server.serve_forever)
     HTTPInfo.thread.start()
 
-    ESInfo.server = ElasticsearchServer()
-    os.environ['DSS_ES_PORT'] = str(ESInfo.server.port)
+    # ESInfo.server = ElasticsearchServer()
+    # os.environ['DSS_ES_PORT'] = str(ESInfo.server.port)
+    os.environ['DSS_ES_PORT'] = '9200'
 
 def tearDownModule():
-    ESInfo.server.shutdown()
+    # ESInfo.server.shutdown()
     HTTPInfo.server.shutdown()
     IndexSuffix.reset()
     os.unsetenv('DSS_ES_PORT')

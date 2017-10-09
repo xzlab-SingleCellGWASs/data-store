@@ -19,17 +19,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-
-class ESInfo:
-    server = None
+# class ESInfo:
+#     server = None
 
 def setUpModule():
-    IndexSuffix.name = __name__.rsplit('.', 1)[-1]
-    ESInfo.server = ElasticsearchServer()
-    os.environ['DSS_ES_PORT'] = str(ESInfo.server.port)
+    IndexSuffix.set_name(__name__.rsplit('.', 1)[-1])
+    # ESInfo.server = ElasticsearchServer()
+    # os.environ['DSS_ES_PORT'] = str(ESInfo.server.port)
+    os.environ['DSS_ES_PORT'] = '9200'
 
 def tearDownModule():
-    ESInfo.server.shutdown()
+    # ESInfo.server.shutdown()
     IndexSuffix.reset()
     os.unsetenv('DSS_ES_PORT')
 

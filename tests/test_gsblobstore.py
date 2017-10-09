@@ -11,7 +11,7 @@ sys.path.insert(0, pkg_root)  # noqa
 from dss.blobstore.gs import GSBlobStore
 from dss.blobstore import BlobNotFoundError
 from tests import infra
-from tests.test_blobstore import BlobStoreTests
+from tests.blobstore_test_base import BlobStoreTests
 
 
 class TestGSBlobStore(unittest.TestCase, BlobStoreTests):

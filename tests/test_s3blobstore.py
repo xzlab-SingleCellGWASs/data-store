@@ -12,7 +12,7 @@ sys.path.insert(0, pkg_root)  # noqa
 from dss.blobstore import BlobNotFoundError
 from dss.blobstore.s3 import S3BlobStore
 from tests import infra
-from tests.test_blobstore import BlobStoreTests
+from tests.blobstore_test_base import BlobStoreTests
 
 
 class TestS3BlobStore(unittest.TestCase, BlobStoreTests):
