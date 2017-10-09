@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import sys
-import unittest
 import uuid
 from contextlib import contextmanager
 from io import open
@@ -30,19 +29,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-
-class ESInfo:
-    server = None
-
-def setUpModule():
-    IndexSuffix.name = __name__.rsplit('.', 1)[-1]
-    ESInfo.server = ElasticsearchServer()
-    os.environ['DSS_ES_PORT'] = str(ESInfo.server.port)
-
-def tearDownModule():
-    ESInfo.server.shutdown()
-    IndexSuffix.reset()
-    os.unsetenv('DSS_ES_PORT')
 
 class TestSubscriptionsBase(DSSAssertMixin):
     @classmethod
@@ -248,19 +234,3 @@ class TestSubscriptionsBase(DSSAssertMixin):
             yield
         finally:
             connexion.apis.abstract.Operation.testing_403 = orig_testing_403
-
-
-class TestGCPSubscription(TestSubscriptionsBase, unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().subsciption_setup(dss.Replica.gcp)
-
-
-class TestAWSSubscription(TestSubscriptionsBase, unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().subsciption_setup(dss.Replica.aws)
-
-
-if __name__ == '__main__':
-    unittest.main()

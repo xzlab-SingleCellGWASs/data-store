@@ -8,17 +8,14 @@ import logging
 import os
 import socket
 import sys
-import threading
 import time
 import unittest
 import uuid
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from random import randint
-from typing import Dict
 
 import google.auth
 import google.auth.transport.requests
-import moto
 import requests
 from requests_http_signature import HTTPSignatureAuth
 
@@ -28,10 +25,10 @@ sys.path.insert(0, pkg_root)  # noqa
 import dss
 from dss import Config, DeploymentStage
 from dss.config import IndexSuffix
-from dss.events.handlers.index import process_new_s3_indexable_object, process_new_gs_indexable_object, notify
+from dss.events.handlers.index import process_new_s3_indexable_object, process_new_gs_indexable_object
 from dss.hcablobstore import BundleMetadata, BundleFileMetadata, FileMetadata
 from dss.util import create_blob_key, UrlBuilder
-from dss.util.es import ElasticsearchClient, ElasticsearchServer
+from dss.util.es import ElasticsearchClient
 from tests import get_version
 from tests.es import elasticsearch_delete_index
 from tests.infra import DSSAssertMixin, DSSUploadMixin, DSSStorageMixin, TestBundle, start_verbose_logging
@@ -68,26 +65,6 @@ class HTTPInfo:
     port = None
     server = None
     thread = None
-
-class ESInfo:
-    server = None
-
-def setUpModule():
-    IndexSuffix.name = __name__.rsplit('.', 1)[-1]
-    HTTPInfo.port = findOpenPort()
-    HTTPInfo.server = HTTPServer((HTTPInfo.address, HTTPInfo.port), PostTestHandler)
-    HTTPInfo.thread = threading.Thread(target=HTTPInfo.server.serve_forever)
-    HTTPInfo.thread.start()
-
-    ESInfo.server = ElasticsearchServer()
-    os.environ['DSS_ES_PORT'] = str(ESInfo.server.port)
-
-def tearDownModule():
-    ESInfo.server.shutdown()
-    HTTPInfo.server.shutdown()
-    IndexSuffix.reset()
-    os.unsetenv('DSS_ES_PORT')
-
 
 class TestIndexerBase(DSSAssertMixin, DSSStorageMixin, DSSUploadMixin):
     @classmethod
@@ -389,40 +366,6 @@ class TestIndexerBase(DSSAssertMixin, DSSStorageMixin, DSSUploadMixin):
 
     def process_new_indexable_object(self, event, logger):
         raise NotImplemented()
-
-
-class TestAWSIndexer(TestIndexerBase, unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        super().indexer_setup("aws")
-
-    def process_new_indexable_object(self, event, logger):
-        process_new_s3_indexable_object(event, logger)
-
-    def create_bundle_created_event(self, bundle_key, bucket_name) -> Dict:
-        with open(os.path.join(os.path.dirname(__file__), "sample_s3_bundle_created_event.json")) as fh:
-            sample_event = json.load(fh)
-        sample_event['Records'][0]["s3"]['bucket']['name'] = bucket_name
-        sample_event['Records'][0]["s3"]['object']['key'] = bundle_key
-        return sample_event
-
-
-class TestGCPIndexer(TestIndexerBase, unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        super().indexer_setup("gcp")
-
-    def process_new_indexable_object(self, event, logger):
-        process_new_gs_indexable_object(event, logger)
-
-    def create_bundle_created_event(self, bundle_key, bucket_name) -> Dict:
-        with open(os.path.join(os.path.dirname(__file__), "sample_gs_bundle_created_event.json")) as fh:
-            sample_event = json.load(fh)
-        sample_event["bucket"] = bucket_name
-        sample_event["name"] = bundle_key
-        return sample_event
 
 
 class BundleBuilder:

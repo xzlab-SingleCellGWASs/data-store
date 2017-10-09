@@ -11,7 +11,7 @@ sys.path.insert(0, pkg_root)  # noqa
 from dss.blobstore.gs import GSBlobStore
 from dss.hcablobstore.gs import GSHCABlobStore
 from tests import infra
-from tests.test_hcablobstore import HCABlobStoreTests
+from tests.hcablobstore_test_base import HCABlobStoreTests
 
 
 class TestGSHCABlobStore(unittest.TestCase, HCABlobStoreTests):

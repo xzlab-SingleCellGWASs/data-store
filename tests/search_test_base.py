@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 import time
-import unittest
 import uuid
 from urllib.parse import parse_qs, parse_qsl, urlparse, urlsplit
 from requests.utils import parse_header_links
@@ -35,23 +34,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 start_verbose_logging()
-
-
-class ESInfo:
-    server = None
-
-
-def setUpModule():
-    IndexSuffix.name = __name__.rsplit('.', 1)[-1]
-    ESInfo.server = ElasticsearchServer()
-    os.environ['DSS_ES_PORT'] = str(ESInfo.server.port)
-
-
-def tearDownModule():
-    ESInfo.server.shutdown()
-    IndexSuffix.reset()
-    os.unsetenv('DSS_ES_PORT')
-
 
 class TestSearchBase(DSSAssertMixin):
     @classmethod
@@ -372,19 +354,3 @@ class TestSearchBase(DSSAssertMixin):
                 time.sleep(0.5)
         else:
             self.fail("elasticsearch failed to return all results.")
-
-
-class TestGCPSearch(TestSearchBase, unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().search_setup(dss.Replica.gcp)
-
-
-class TestAWSSearch(TestSearchBase, unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().search_setup(dss.Replica.aws)
-
-
-if __name__ == "__main__":
-    unittest.main()
