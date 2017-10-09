@@ -25,12 +25,16 @@ install:
 - pip install -r requirements-dev.txt
 - wget -q ${ES_DOWNLOAD_URL}
 - tar -xzf elasticsearch-${ES_VERSION}.tar.gz
+- ./elasticsearch-${ES_VERSION}/bin/elasticsearch &
 - wget -q http://us-east-1.ec2.archive.ubuntu.com/ubuntu/pool/main/m/make-dfsg/make_4.1-6_amd64.deb
 - mkdir make4
 - dpkg -x make*.deb make4
 - export PATH=$(pwd)/make4/usr/bin:$PATH
+before_script:
+- for i in {0..60}; do nc -z localhost 9200 && break; sleep 1; [[ $i == 60 ]] && exit 1; done
 script:
 - set -eo pipefail
+- elasticsearch -d
 - make -j4 -O test
 - if [[ $TRAVIS_BRANCH == staging ]]; then source environment.staging; fi
 - if [[ $TRAVIS_EVENT_TYPE == cron ]]; then make smoketest; fi
