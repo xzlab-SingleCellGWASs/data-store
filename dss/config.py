@@ -40,7 +40,7 @@ class IndexSuffix:
 
     @name.setter
     def name(self, value: str):
-        self.__suf__ = value
+        self.__suf__ = value.lower()
 
     @classmethod
     def reset(cls):
