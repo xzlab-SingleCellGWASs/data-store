@@ -25,7 +25,7 @@ sys.path.insert(0, pkg_root)  # noqa
 import dss
 from dss import Config, DeploymentStage
 from dss.config import IndexSuffix
-from dss.events.handlers.index import process_new_s3_indexable_object, process_new_gs_indexable_object
+from dss.events.handlers.index import notify
 from dss.hcablobstore import BundleMetadata, BundleFileMetadata, FileMetadata
 from dss.util import create_blob_key, UrlBuilder
 from dss.util.es import ElasticsearchClient

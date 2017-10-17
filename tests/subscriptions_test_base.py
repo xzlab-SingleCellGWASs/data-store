@@ -20,7 +20,7 @@ sys.path.insert(0, pkg_root) # noqa
 import dss
 from dss.config import IndexSuffix
 from dss.util import UrlBuilder
-from dss.util.es import ElasticsearchClient, ElasticsearchServer, get_elasticsearch_index
+from dss.util.es import ElasticsearchClient, get_elasticsearch_index
 from tests.es import elasticsearch_delete_index
 from tests.infra import DSSAssertMixin, ExpectedErrorFields
 from tests.infra.server import ThreadedLocalServer
