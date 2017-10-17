@@ -52,7 +52,7 @@ class TestSearchBase(DSSAssertMixin):
 
     def setUp(self):
         dss.Config.set_config(dss.DeploymentStage.TEST)
-        elasticsearch_delete_index(f"*{IndexSuffix.name}")
+        elasticsearch_delete_index(f"*{IndexSuffix.get_name()}")
         create_elasticsearch_index(self.dss_index_name, logger)
 
     def test_search_post(self):

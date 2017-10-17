@@ -85,7 +85,7 @@ class TestIndexerBase(DSSAssertMixin, DSSStorageMixin, DSSUploadMixin):
         cls.app.shutdown()
 
     def setUp(self):
-        elasticsearch_delete_index(f"*{IndexSuffix.name}")
+        elasticsearch_delete_index(f"*{IndexSuffix.get_name()}")
         PostTestHandler.reset()
 
     def tearDown(self):
