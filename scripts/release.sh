@@ -63,11 +63,15 @@ git tag $RELEASE_TAG
 git push --force origin $PROMOTE_DEST_BRANCH
 git push --tags
 
+[[ -z $SLACK_WEBHOOK_URL ]] || http $SLACK_WEBHOOK_URL text="$(whoami) promoted $PROMOTE_FROM_BRANCH to $PROMOTE_DEST_BRANCH"
+
 if yq -e '.deploy[] | select(.true.branch == env.PROMOTE_DEST_BRANCH)' .travis.yml; then
     echo "Found deployment config for $PROMOTE_DEST_BRANCH in Travis CI. Skipping deployment."
+    [[ -z $SLACK_WEBHOOK_URL ]] || http $SLACK_WEBHOOK_URL text="Travis CI will deploy $PROMOTE_DEST_BRANCH"
 elif [[ -e "${DSS_HOME}/environment.${PROMOTE_DEST_BRANCH}" ]]; then
     source "${DSS_HOME}/environment.${PROMOTE_DEST_BRANCH}"
     make -C "$DSS_HOME" deploy
+    [[ -z $SLACK_WEBHOOK_URL ]] || http $SLACK_WEBHOOK_URL text="$(whoami) deployed $PROMOTE_DEST_BRANCH to $API_HOST"
 else
     echo "Error: Could not find environment config file ${DSS_HOME}/environment.${PROMOTE_DEST_BRANCH}. Unable to deploy."
     exit 1

@@ -36,6 +36,8 @@ script:
 - if [[ $TRAVIS_EVENT_TYPE == cron ]]; then make smoketest; fi
 after_success:
 - bash <(curl -s https://codecov.io/bash)
+after_failure:
+- if [[ $TRAVIS_BRANCH == staging ]]; then http $SLACK_WEBHOOK_URL text="Travis CI build failed on ${TRAVIS_BRANCH} ${TRAVIS_COMMIT}"; fi
 deploy:
   - provider: script
     script: make -j4 -O deploy
@@ -47,6 +49,8 @@ deploy:
     skip_cleanup: true
     on:
       branch: staging
+after_deploy:
+- http $SLACK_WEBHOOK_URL text="Travis CI deploy succeeded on ${TRAVIS_BRANCH} ${TRAVIS_COMMIT}"
 env:
   global:
   - ES_VERSION=5.4.2
