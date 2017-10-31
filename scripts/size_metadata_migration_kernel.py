@@ -35,6 +35,7 @@ class MigrationKernel:
 
     def migrate_bundle_manifest(self):
         manifest = json.loads(self.handle.get(self.bucket, self.key).decode("utf-8"))
+
         for file in manifest[BundleMetadata.FILES]:
             filekey = "files/{}.{}".format(file[BundleFileMetadata.UUID], file[BundleFileMetadata.VERSION])
             file_manifest = json.loads(self.handle.get(self.bucket, filekey).decode("utf-8"))
