@@ -649,87 +649,88 @@ class TestIndexerBase(unittest.TestCase, DSSAssertMixin, DSSStorageMixin, DSSUpl
     @testmode.standalone
     def test_scrub_index_data_removes_extra_fields_when_fields_not_specified_in_schema(self):
         manifest = read_bundle_manifest(self.blobstore, self.test_bucket, self.bundle_key)
-            index_data = create_index_data(self.blobstore, self.test_bucket, self.bundle_key, manifest)
-            index_data['files']['assay_json'].update({'extra_top': 123,
-                                                      'extra_obj': {"something": "here", "another": 123},
-                                                      'extra_lst': ["a", "b"]})
-            index_data['files']['assay_json']['core']['extra_internal'] = 123
-            index_data['files']['sample_json']['extra_0'] = "tests patterned properties."
-            index_data['files']['project_json']['extra_1'] = "Another extra field in a different file."
-            index_data['files']['project_json']['extra_2'] = "Another extra field in a different file."
-            index_data['files']['project_json']['core']['characteristics_3'] = "patternProperties only apply to root."
-            bundle_fqid = self.bundle_key.split('/')[1]
+        index_data = create_index_data(self.blobstore, self.test_bucket, self.bundle_key, manifest)
+        index_data['files']['assay_json'].update({'extra_top': 123,
+                                                  'extra_obj': {"something": "here", "another": 123},
+                                                  'extra_lst': ["a", "b"]})
+        index_data['files']['assay_json']['core']['extra_internal'] = 123
+        index_data['files']['sample_json']['extra_0'] = "tests patterned properties."
+        index_data['files']['project_json']['extra_1'] = "Another extra field in a different file."
+        index_data['files']['project_json']['extra_2'] = "Another extra field in a different file."
+        index_data['files']['project_json']['core']['characteristics_3'] = "patternProperties only apply to root."
+        bundle_fqid = self.bundle_key.split('/')[1]
 
-            with self.assertLogs(logger, level="INFO") as log_monitor:
-                scrub_index_data(index_data['files'], bundle_fqid, logger)
-            self.assertRegex(log_monitor.output[0], r"INFO:[^:]+:In [\w\-\.]+, unexpected additional fields "
-                                                    r"have been removed from the data to be indexed. "
-                                                    r"Removed \[[^\]]*].")
-            self.verify_index_document_structure_and_content(
-                index_data,
-                self.bundle_key,
-                files=smartseq2_paried_ends_indexed_file_list,
-            )
+        with self.assertLogs(logger, level="INFO") as log_monitor:
+            scrub_index_data(index_data['files'], bundle_fqid, logger)
+        self.assertRegex(log_monitor.output[0], r"INFO:[^:]+:In [\w\-\.]+, unexpected additional fields "
+                                                r"have been removed from the data to be indexed. "
+                                                r"Removed \[[^\]]*].")
+        self.verify_index_document_structure_and_content(
+            index_data,
+            self.bundle_key,
+            files=smartseq2_paried_ends_indexed_file_list,
+        )
 
     @testmode.standalone
-    def test_scrub_index_data_removeds_document_from_meta_data_when_an_invalid_url_is_in_core_schema_url(self):
+    def test_scrub_index_data_removes_document_from_meta_data_when_an_invalid_url_is_in_core_schema_url(self):
         manifest = read_bundle_manifest(self.blobstore, self.test_bucket, self.bundle_key)
         doc = 'assay_json'
-            invalid_url = "://invalid_url"
+        invalid_url = "://invalid_url"
         bundle_fqid = self.bundle_key.split('/')[1]
-            index_data = create_index_data(self.blobstore, self.test_bucket, self.bundle_key, manifest)
-            index_data['files'][doc]['core']['schema_url'] = invalid_url
-            with self.assertLogs(logger, level="WARNING") as log_monitor:
-                scrub_index_data(index_data['files'], bundle_fqid, logger)
-            self.assertRegex(log_monitor.output[0], f"WARNING:[^:]+:Unable to retrieve schema from {doc} in "
-                                                    f"{bundle_fqid} because retrieving {invalid_url} caused exception: .*")
-            self.verify_index_document_structure_and_content(
-                index_data,
-                self.bundle_key,
-                files=smartseq2_paried_ends_indexed_file_list,
-                excluded_files=[doc]
-            )
+        index_data = create_index_data(self.blobstore, self.test_bucket, self.bundle_key, manifest)
+        index_data['files'][doc]['core']['schema_url'] = invalid_url
+        with self.assertLogs(logger, level="WARNING") as log_monitor:
+            scrub_index_data(index_data['files'], bundle_fqid, logger)
+        self.assertRegex(log_monitor.output[0], f"WARNING:[^:]+:Unable to retrieve schema from {doc} in "
+                                                f"{bundle_fqid} because retrieving {invalid_url} caused exception: "
+                                                f".*")
+        self.verify_index_document_structure_and_content(
+            index_data,
+            self.bundle_key,
+            files=smartseq2_paried_ends_indexed_file_list,
+            excluded_files=[doc]
+        )
 
     @testmode.standalone
     def test_scrub_index_data_removes_document_from_meta_data_when_document_is_missing_core_schema_url_field(self):
         manifest = read_bundle_manifest(self.blobstore, self.test_bucket, self.bundle_key)
         doc = 'assay_json'
-            index_data = create_index_data(self.blobstore, self.test_bucket, self.bundle_key, manifest)
-            index_data['files'][doc]['core'].pop('schema_url')
+        index_data = create_index_data(self.blobstore, self.test_bucket, self.bundle_key, manifest)
+        index_data['files'][doc]['core'].pop('schema_url')
         bundle_fqid = self.bundle_key.split('/')[1]
-            with self.assertLogs(logger, level="WARNING") as log_monitor:
-                scrub_index_data(index_data['files'], bundle_fqid, logger)
-            self.assertRegex(log_monitor.output[0], f"WARNING:[^:]+:Unable to retrieve schema_url from {doc} in "
-                                                    f"{bundle_fqid} because core.schema_url does not exist.*")
-            self.verify_index_document_structure_and_content(
-                index_data,
-                self.bundle_key,
-                files=smartseq2_paried_ends_indexed_file_list,
-                excluded_files=[doc]
-            )
+        with self.assertLogs(logger, level="WARNING") as log_monitor:
+            scrub_index_data(index_data['files'], bundle_fqid, logger)
+        self.assertRegex(log_monitor.output[0], f"WARNING:[^:]+:Unable to retrieve schema_url from {doc} in "
+                                                f"{bundle_fqid} because core.schema_url does not exist.*")
+        self.verify_index_document_structure_and_content(
+            index_data,
+            self.bundle_key,
+            files=smartseq2_paried_ends_indexed_file_list,
+            excluded_files=[doc]
+        )
 
     @testmode.standalone
     def test_scrub_index_data_removes_document_from_meta_data_when_document_is_missing_core_field(self):
-            bundle_key = self.load_test_data_bundle_for_path(
-                "fixtures/indexing/bundles/unversioned/smartseq2/paired_ends_extras")
-            bundle_fqid = bundle_key.split('/')[1]
-            manifest = read_bundle_manifest(self.blobstore, self.test_bucket, bundle_key)
-            index_data = create_index_data(self.blobstore, self.test_bucket, bundle_key, manifest)
-            for file in index_data['files']:
-                file.pop('core', None)
-            scrub_index_data(index_data['files'], bundle_fqid, logger)
-            self.assertEqual(4, len(index_data.keys()))
-            self.assertEqual("new", index_data['state'])
-            self.assertIsNotNone(index_data['manifest'])
-            self.assertEqual(index_data['files'], {})
-            expected_index_data = generate_expected_index_document(self.blobstore,
-                                                                   self.test_bucket,
-                                                                   bundle_key,
-                                                                   smartseq2_paried_ends_indexed_file_list)
-            self.assertDictEqual(expected_index_data, index_data, msg=f"Expected index document: "
-                                                                      f"{json.dumps(expected_index_data, indent=4)}"
-                                                                      f"Actual index document: "
-                                                                      f"{json.dumps(index_data, indent=4)}")
+        bundle_key = self.load_test_data_bundle_for_path(
+            "fixtures/indexing/bundles/unversioned/smartseq2/paired_ends_extras")
+        bundle_fqid = bundle_key.split('/')[1]
+        manifest = read_bundle_manifest(self.blobstore, self.test_bucket, bundle_key)
+        index_data = create_index_data(self.blobstore, self.test_bucket, bundle_key, manifest)
+        for file in index_data['files']:
+            file.pop('core', None)
+        scrub_index_data(index_data['files'], bundle_fqid, logger)
+        self.assertEqual(4, len(index_data.keys()))
+        self.assertEqual("new", index_data['state'])
+        self.assertIsNotNone(index_data['manifest'])
+        self.assertEqual(index_data['files'], {})
+        expected_index_data = generate_expected_index_document(self.blobstore,
+                                                               self.test_bucket,
+                                                               bundle_key,
+                                                               smartseq2_paried_ends_indexed_file_list)
+        self.assertDictEqual(expected_index_data, index_data, msg=f"Expected index document: "
+                                                                  f"{json.dumps(expected_index_data, indent=4)}"
+                                                                  f"Actual index document: "
+                                                                  f"{json.dumps(index_data, indent=4)}")
 
     def verify_notification(self, subscription_id, es_query, bundle_fqid):
         posted_payload_string = self.get_notification_payload()
