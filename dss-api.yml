@@ -789,9 +789,26 @@ paths:
       description: |
         Initiate asynchronous checkout of a bundle. The response JSON contains a field, `checkout_job_id`, that can be
         used to query the status of the checkout via the `GET /bundles/checkout/{checkout_job_id}` API method.
+        When using user-managed destination the following policy statement to be added to the destination bucket
+         {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": [
+                            "arn:aws:iam::861229788715:role/dss-checkout-sfn-{{DSS_DEPLOYMENT_STAGE}}",
+                            "arn:aws:iam::861229788715:role/dss-s3-copy-sfn-{{DSS_DEPLOYMENT_STAGE}}"
+                        ]
+                    },
+                    "Action": "s3:*",
+                    "Resource": [
+                        "arn:aws:s3:::<user-managed-bucket>/*"
+                    ]
+                }
+            ]
+        }
         FIXME: document the error code returned when the bundle or specified version does not exist.
-        TODO: After some time period, the data will be removed.
-        TBD: This could be based on initial checkout time or last access time.
       operationId: dss.api.bundles.checkout.post
       parameters:
         - name: uuid
