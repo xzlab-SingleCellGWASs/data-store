@@ -22,6 +22,9 @@ from dss.storage.identifiers import BundleFQID, ObjectIdentifier
 
 logger = logging.getLogger(__name__)
 
+SCHEMA_URL_PATTERN = r'/(?P<major_version>[0-9]+)\.[0-9]+\.[0-9]+[\w\d/]*/(?P<type>[\w\d]+)(.json)?$'
+SCHEMA_URL_REGEX = re.compile(SCHEMA_URL_PATTERN)
+
 
 class IndexDocument(dict):
     """
@@ -232,15 +235,19 @@ class BundleDocument(IndexDocument):
         """
         schema_version_map = defaultdict(set)  # type: typing.MutableMapping[str, typing.MutableSet[str]]
         for file_name, file_content in self.files.items():
+            schema_url = file_content.get('describedBy')
             core = file_content.get('core')
             if core is not None:
                 schema_type = core['type']
                 schema_version = core['schema_version']
                 schema_version_major = schema_version.split(".")[0]
                 schema_version_map[schema_version_major].add(schema_type)
+            elif schema_url is not None:
+                schema_version_major, schema_type = SCHEMA_URL_REGEX.search(schema_url).group('major_version', 'type')
+                schema_version_map[schema_version_major].add(schema_type)
             else:
-                logger.info(f"File {file_name} does not contain the 'core' section necessary to identify "
-                            f"the schema and its version.")
+                logger.info(f"File {file_name} does not contain the 'core' or 'describedBy' section necessary to "
+                            f"identify the schema and its version.")
         if schema_version_map:
             schema_versions = schema_version_map.keys()
             assert len(schema_versions) == 1, \

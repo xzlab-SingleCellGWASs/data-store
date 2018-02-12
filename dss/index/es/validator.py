@@ -49,8 +49,10 @@ def scrub_index_data(index_data: dict, bundle_id: str) -> list:
     extra_fields = []
     extra_documents = []
     for document in index_data.keys():
-        core = index_data[document].get('core')
-        schema_url = None if core is None else core.get('schema_url')
+        schema_url = index_data[document].get('describedBy')
+        if not schema_url:
+            core = index_data[document].get('core')
+            schema_url = None if core is None else core.get('schema_url')
         if schema_url is not None:
             try:
                 schema = request_json(schema_url)

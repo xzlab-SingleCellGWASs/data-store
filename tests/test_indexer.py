@@ -3,6 +3,7 @@
 
 from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+import copy
 import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import io
@@ -50,7 +51,6 @@ logger = logging.getLogger(__name__)
 # TODO (mbaumann) When the defects in moto have been fixed, remove True from the line below.
 USE_AWS_S3 = bool(os.environ.get("USE_AWS_S3", True))
 
-# TODO: (tsmith) test with multiple doc indexes once indexing by major version is compeleted
 
 #
 # Basic test for DSS indexer:
@@ -85,7 +85,7 @@ def tearDownModule():
 
 
 @testmode.standalone
-class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DSSUploadMixin, metaclass=ABCMeta):
+class IndexerTestBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DSSUploadMixin, metaclass=ABCMeta):
     bundle_key_by_replica = dict()  # type: typing.MutableMapping[str, str]
 
     @classmethod
@@ -483,7 +483,7 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
         self.verify_notification(subscription_id, subscription_query, bundle_fqid)
         self.delete_subscription(subscription_id)
 
-    def test_get_shape_descriptor(self):
+    def test_get_shape_descriptor_core(self):
         index_document = BundleDocument(self.replica, get_bundle_fqid())
         index_document.update({
             'files': {
@@ -520,11 +520,53 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
         with self.subTest("An versioned file and an unversioned file"):
             with self.assertLogs(dss.logger, level="INFO") as log_monitor:
                 index_document.get_shape_descriptor()
-            self.assertRegex(log_monitor.output[0], "^INFO:.*File assay_json does not contain the 'core' section "
-                                                    "necessary to identify the schema and its version.", )
+            self.assertRegex(log_monitor.output[0], f"^INFO:.*File assay_json does not contain the 'core' or "
+                                                    f"'describedBy' section necessary to identify the schema and its "
+                                                    f"version.")
             self.assertEqual(index_document.get_shape_descriptor(), "v4")
 
         index_document['files']['sample_json'].pop('core')
+        with self.subTest("no versioned file"):
+            self.assertEqual(index_document.get_shape_descriptor(), None)
+
+    def test_get_shape_descriptor_describedBy(self):
+        index_document = BundleDocument(self.replica, get_bundle_fqid())
+        index_document.update({
+            'files': {
+                'assay_json': {
+                    "describedBy": "http://schema.humancellatlas.org/module/5.0.0/assay.json"
+
+                },
+                'sample_json': {
+                    "describedBy": "http://schema.humancellatlas.org/module/5.0.0/sample.json"
+                }
+            }
+        })
+        with self.subTest("Same major version."):
+            self.assertEqual(index_document.get_shape_descriptor(), "v5")
+
+        v4_assay_url = "http://schema.humancellatlas.org/module/4.0.0/assay.json"
+        index_document['files']['assay_json']['describedBy'] = v4_assay_url
+        with self.subTest("Mixed/inconsistent metadata schema release versions in the same bundle"):
+            with self.assertRaisesRegex(AssertionError,
+                                        "The bundle contains mixed schema major version numbers: \['4', '5'\]"):
+                index_document.get_shape_descriptor()
+
+        v4_sample_url = "http://schema.humancellatlas.org/module/4.0.0/sample.json"
+        index_document['files']['sample_json']['describedBy'] = v4_sample_url
+        with self.subTest("Consistent versions, with a different version value"):
+            self.assertEqual(index_document.get_shape_descriptor(), "v4")
+
+        index_document['files']['assay_json'].pop('describedBy')
+        with self.subTest("A versioned file and an unversioned file"):
+            with self.assertLogs(dss.logger, level="INFO") as log_monitor:
+                index_document.get_shape_descriptor()
+            self.assertRegex(log_monitor.output[0], r"^INFO:.*File assay_json does not contain the 'core' or "
+                                                    r"'describedBy' section necessary to identify the schema and its "
+                                                    r"version.")
+            self.assertEqual(index_document.get_shape_descriptor(), "v4")
+
+        index_document['files']['sample_json'].pop('describedBy')
         with self.subTest("no versioned file"):
             self.assertEqual(index_document.get_shape_descriptor(), None)
 
@@ -630,7 +672,7 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
 
         self.delete_subscription(subscription_id)
 
-    def test_scrub_index_data(self):
+    def test_scrub_index_data_with_core(self):
         manifest = read_bundle_manifest(self.blobstore, self.test_bucket, self.bundle_key)
         doc = 'assay_json'
         with self.subTest("removes extra fields when fields not specified in schema."):
@@ -647,9 +689,8 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
 
             with self.assertLogs(dss.logger, level="INFO") as log_monitor:
                 scrub_index_data(index_data['files'], bundle_fqid)
-            self.assertRegex(log_monitor.output[0], r"INFO:[^:]+:In [\w\-\.]+, unexpected additional fields "
-                                                    r"have been removed from the data to be indexed. "
-                                                    r"Removed \[[^\]]*].")
+            self.assertRegexIn(r"INFO:[^:]+:In [\w\-\.]+, unexpected additional fields have been removed from the "
+                               r"data to be indexed. Removed \[[^\]]*].", log_monitor.output)
             self.verify_index_document_structure_and_content(
                 index_data,
                 self.bundle_key,
@@ -662,9 +703,8 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
             index_data['files'][doc]['core']['schema_url'] = invalid_url
             with self.assertLogs(dss.logger, level="WARNING") as log_monitor:
                 scrub_index_data(index_data['files'], bundle_fqid)
-            self.assertRegex(log_monitor.output[0], f"WARNING:[^:]+:Unable to retrieve schema from {doc} in "
-                                                    f"{bundle_fqid} because retrieving {invalid_url} caused exception: "
-                                                    f".*")
+            self.assertRegexIn(f"WARNING:[^:]+:Unable to retrieve schema from {doc} in {bundle_fqid} because "
+                               f"retrieving {invalid_url} caused exception: .*", log_monitor.output)
             self.verify_index_document_structure_and_content(
                 index_data,
                 self.bundle_key,
@@ -677,8 +717,8 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
             index_data['files'][doc]['core'].pop('schema_url')
             with self.assertLogs(dss.logger, level="WARNING") as log_monitor:
                 scrub_index_data(index_data['files'], bundle_fqid)
-            self.assertRegex(log_monitor.output[0], f"WARNING:[^:]+:Unable to retrieve schema_url from {doc} in "
-                                                    f"{bundle_fqid} because core.schema_url does not exist.*")
+            self.assertRegexIn(f"WARNING:[^:]+:Unable to retrieve schema_url from {doc} in {bundle_fqid} because "
+                               f"core.schema_url does not exist.*", log_monitor.output)
             self.verify_index_document_structure_and_content(
                 index_data,
                 self.bundle_key,
@@ -710,6 +750,141 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
                                                                       f"{json.dumps(expected_index_data, indent=4)}"
                                                                       f"Actual index document: "
                                                                       f"{json.dumps(index_data, indent=4)}")
+
+    def test_scrub_index_data_with_schema(self):
+        index_data_master = {
+            "files": {
+                "biomaterial_bundle_json": {
+                    "describedBy": "https://raw.githubusercontent.com/HumanCellAtlas/metadata-schema/"
+                                   "5.0.0/json_schema/bundle/biomaterial.json",
+                    "schema_version": "5.0.0",
+                    "schema_type": "biomaterial_bundle",
+                    "biomaterials": [
+                        {
+                            "hca_ingest": {
+                                "describedBy": "https://schema.humancellatlas.org/bundle/5.0.0/ingest_audit",
+                                "document_id": "a37dbd93-b93a-4838-a7bb-cd0796b3d9d0",
+                                "submissionDate": "2017-10-13T09:18:49.422Z",
+                                "updateDate": "2017-10-13T09:19:40.069Z",
+                                "accession": "SAM0888697"
+                            },
+                            "content": {
+                                "describedBy": "https://schema.humancellatlas.org/type/biomaterial/"
+                                               "5.0.0/donor_organism",
+                                "schema_version": "5.0.0",
+                                "schema_type": "biomaterial",
+                                "biomaterial_core": {
+                                    "describedBy": "https://schema.humancellatlas.org/core/biomaterial/"
+                                                   "5.0.0/biomaterial_core",
+                                    "biomaterial_id": "d1",
+                                    "biomaterial_name": "donor1",
+                                    "ncbi_taxon_id": [
+                                        9606
+                                    ]
+                                },
+                                "is_living": True,
+                                "biological_sex": "male",
+                                "development_stage": {
+                                    "describedBy":
+                                        "https://schema.humancellatlas.org/module/ontology/"
+                                        "5.0.0/development_stage_ontology",
+                                    "text": "adult",
+                                    "ontology": "EFO_0001272"
+                                },
+                                "genus_species": [
+                                    {
+                                        "describedBy": "https://schema.humancellatlas.org/module/ontology/"
+                                                       "5.0.0/species_ontology",
+                                        "text": "Homo sapiens",
+                                        "ontology": "NCBITAXON_9606"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "hca_ingest": {
+                                "describedBy": "https://schema.humancellatlas.org/bundle/5.0.0/ingest_audit",
+                                "document_id": "a37dbd93-b93a-4838-a7bb-cd0796b3d9d1",
+                                "submissionDate": "2017-10-13T09:18:49.422Z",
+                                "updateDate": "2017-10-13T09:19:40.069Z",
+                                "accession": "SAM0999697"
+                            },
+                            "content": {
+                                "describedBy": "https://schema.humancellatlas.org/type/biomaterial/"
+                                               "5.0.0/specimen_from_organism",
+                                "schema_version": "5.0.0",
+                                "schema_type": "biomaterial",
+                                "biomaterial_core": {
+                                    "describedBy": "https://schema.humancellatlas.org/core/biomaterial/"
+                                                   "5.0.0/biomaterial_core",
+                                    "biomaterial_id": "s1",
+                                    "biomaterial_name": "PBMCs",
+                                    "biomaterial_description": "peripheral blood mononuclear cells (PBMCs)",
+                                    "ncbi_taxon_id": [
+                                        9606
+                                    ],
+                                    "has_input_biomaterial": "d1"
+                                },
+                                "organ": {
+                                    "describedBy": "https://schema.humancellatlas.org/module/ontology/"
+                                                   "5.0.0/organ_ontology",
+                                    "text": "blood",
+                                    "ontology": "UBERON_0000178"
+                                },
+                                "organ_part": {
+                                    "describedBy": "https://schema.humancellatlas.org/module/ontology/"
+                                                   "5.0.0/organ_part_ontology",
+                                    "text": "peripheral blood mononuclear cells (PBMCs)"
+                                }
+                            },
+                            "derived_from": ["a37dbd93-b93a-4838-a7bb-cd0796b3d9d1"],
+                            "derivation_processes": []
+                        }
+                    ]
+                },
+                "ingest_audit_json": {
+                    "describedBy": "https://raw.githubusercontent.com/HumanCellAtlas/metadata-schema/"
+                                   "5.0.0/json_schema/bundle/ingest_audit.json",
+                    "document_id": ".{8}-.{4}-.{4}-.{4}-.{12}",
+                    "submissionDate": "08-08-2018"
+                }
+            }
+        }
+        doc = 'biomaterial_bundle_json'
+        bundle_fqid = self.bundle_key.split('/')[1]
+        index_data_expected = copy.deepcopy(index_data_master)
+        index_data_expected['files'].pop(doc)
+        with self.subTest("document is removed from meta data when an invalid url is in describedBy."):
+            invalid_url = "://invalid_url"
+            index_data = copy.deepcopy(index_data_master)
+            index_data['files'][doc]['describedBy'] = invalid_url
+            with self.assertLogs(dss.logger, level="WARNING") as log_monitor:
+                scrub_index_data(index_data['files'], bundle_fqid)
+            self.assertDictEqual(index_data_expected, index_data)
+            self.assertRegexIn(f"WARNING:[^:]+:Unable to retrieve schema from {doc} in {bundle_fqid} because "
+                               f"retrieving {invalid_url} caused exception: .*", log_monitor.output)
+
+        with self.subTest("document is removed from meta data when document is missing describedBy field."):
+            index_data = copy.deepcopy(index_data_master)
+            index_data['files'][doc].pop('describedBy')
+            with self.assertLogs(dss.logger, level="WARNING") as log_monitor:
+                scrub_index_data(index_data['files'], bundle_fqid)
+            self.assertRegexIn(f"WARNING:[^:]+:Unable to retrieve schema_url from {doc} in {bundle_fqid} because "
+                               f"core.schema_url does not exist.*", log_monitor.output)
+            self.assertDictEqual(index_data_expected, index_data)
+
+        with self.subTest("removes extra fields when fields not specified in schema."):
+            index_data = copy.deepcopy(index_data_master)
+            index_data['files']['biomaterial_bundle_json'].update({'extra_top': 123,
+                                                                   'extra_obj': {"something": "here", "another": 123},
+                                                                   'extra_lst': ["a", "b"]})
+            index_data['files']['ingest_audit_json']['extra_1'] = "Another extra field in a different file."
+
+            with self.assertLogs(dss.logger, level="INFO") as log_monitor:
+                scrub_index_data(index_data['files'], bundle_fqid)
+            self.assertDictEqual(index_data_master, index_data)
+            self.assertRegexIn(r"INFO:[^:]+:In [\w\-\.]+, unexpected additional fields have been removed from the "
+                               r"data to be indexed. Removed \[[^\]]*].", log_monitor.output)
 
     def verify_notification(self, subscription_id, es_query, bundle_fqid):
         posted_payload_string = self.get_notification_payload()
@@ -834,7 +1009,7 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
         raise NotImplementedError()
 
 
-class TestAWSIndexer(TestIndexerBase):
+class TestAWSIndexer(IndexerTestBase):
 
     replica = Replica.aws
 
@@ -852,7 +1027,7 @@ class TestAWSIndexer(TestIndexerBase):
         return sample_event
 
 
-class TestGCPIndexer(TestIndexerBase):
+class TestGCPIndexer(IndexerTestBase):
 
     replica = Replica.gcp
 
@@ -1027,7 +1202,7 @@ def create_index_data(blobstore, bucket_name, bundle_key, manifest,
 # TestCase in the base class, is too inconvenient because it interferes with auto-complete and generates PEP-8
 # warnings about the camel case methods.
 #
-del TestIndexerBase
+del IndexerTestBase
 
 
 if __name__ == "__main__":
