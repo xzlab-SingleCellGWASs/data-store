@@ -260,6 +260,11 @@ class Config:
         Config._S3_CHECKOUT_BUCKET = None
 
     @staticmethod
+    def get_notification_queue_name():
+        stage = os.environ["DSS_DEPLOYMENT_STAGE"]
+        return "dss-notification-{stage}"
+
+    @staticmethod
     def _clear_cached_email_config():
         # clear out the cached email settings.
         Config._ALLOWED_EMAILS = None
