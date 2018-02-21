@@ -1,6 +1,6 @@
 """Utilities in this file are used to removed extra fields from index data before adding to the index."""
 from jsonschema import validators
-from jsonschema import _utils, _validators
+from jsonschema import _utils, Draft4Validator
 import json
 from typing import List
 import logging
@@ -10,14 +10,14 @@ from dss.util.s3urlcache import S3UrlCache
 logger = logging.getLogger(__name__)
 
 
-DSS_Draft4Validator = validators.create(meta_schema=_utils.load_schema("draft4"),
-                                        validators={'$ref': _validators.ref,
-                                                    'additionalProperties': _validators.additionalProperties,
-                                                    'properties': _validators.properties_draft4,
-                                                    'required': _validators.required_draft4
-                                                    },
-                                        version="draft4"
-                                        )
+# DSS_Draft4Validator = validators.create(meta_schema=_utils.load_schema("draft4"),
+#                                         validators={'$ref': _validators.ref,
+#                                                     'additionalProperties': _validators.additionalProperties,
+#                                                     'properties': _validators.properties_draft4,
+#                                                     'required': _validators.required_draft4
+#                                                     },
+#                                         version="draft4"
+#                                         )
 
 
 def remove_json_fields(json_data: dict, path: List[str], fields: List[str]) -> None:
@@ -59,13 +59,15 @@ def scrub_index_data(index_data: dict, bundle_id: str) -> list:
                 logger.warning(f"Unable to retrieve schema from {document} in {bundle_id} "
                                f"because retrieving {schema_url} caused exception: {ex}.")
             else:
-                for error in DSS_Draft4Validator(schema, resolver=resolver).iter_errors(index_data[document]):
+                for error in Draft4Validator(schema, resolver=resolver).iter_errors(index_data[document]):
                     if error.validator == 'additionalProperties':
                         path = [document, *error.path]
                         #  Example error message: "Additional properties are not allowed ('extra_lst', 'extra_top' were
                         #  unexpected)" or "'extra', does not match any of the regexes: '^characteristics_.*$'"
                         fields_to_remove = (path, [field for field in _utils.find_additional_properties(error.instance,
                                                                                                         error.schema)])
+                    elif error is not None:
+                        raise error
                     extra_fields.append(fields_to_remove)
         else:
             logger.warning(f"Unable to retrieve schema_url from {document} in {bundle_id} because "
