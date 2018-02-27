@@ -1,10 +1,13 @@
 import random
+import re
 from typing import Union, List, Optional
 
 import rstr
+from copy import deepcopy
 from faker import Faker
 from faker.providers.python import Provider as PythonProvider
 from jsonschema import RefResolver, Draft4Validator
+from typing import Union, List, Optional, Dict, Any
 
 
 class JsonProvider(PythonProvider):
@@ -28,6 +31,57 @@ class JsonProvider(PythonProvider):
         else:
             assert self._SUPPORTED_JSON_TYPES.issuperset(set(value_types)), "Unsupported types in value_types"
         return value_types
+
+
+def update(d, u):
+    for k, v in u.items():
+        if isinstance(v, dict):
+            d[k] = update(d.get(k, {}), v)
+        elif isinstance(v, list):
+            d[k] = list(set(d.get(k, []) + v))
+        else:
+            if 'min' in k:
+                d[k] = max(v, d.get(k, v))
+            elif 'max' in k:
+                d[k] = min(v, d.get(k, v))
+            else:
+                d[k] = v
+    return d
+
+
+def difference(schema, chosen):
+    remove_keys = []
+    for key, schema_value in schema.items():
+        chosen_value = chosen.get(key)
+        if chosen_value is not None:
+            if isinstance(schema_value, dict):
+                schema[key] = difference(schema_value, chosen_value)
+            elif isinstance(schema_value, list):
+                schema[key] = [i for i in schema_value if i not in chosen_value]
+            else:
+                remove_keys.append(key)
+    for key in remove_keys:
+        schema.pop(key)
+    return schema
+
+
+def remove(d, u):
+    for k, v in u.items():
+        dv = d.get(k)
+        if dv is not None:
+            if k == 'required':
+                for req in v:
+                    d['properties'].pop(req, None)
+                d[k] = [i for i in d[k] if i not in v]
+            elif isinstance(v, dict):
+                d[k] = remove(dv, v)
+            elif isinstance(v, list):
+                d[k] = [i for i in dv if i not in v]
+    return d
+
+
+def sanitize(regex: str) -> str:
+    return re.sub(r'\.', '\.', regex)
 
 
 class JsonGenerator(object):
@@ -97,11 +151,30 @@ class JsonGenerator(object):
         try:
             # should be inside an object now otherwise there should be a ref.
             ref = schema.get(u"$ref")
-            json_type = schema.get(u"type", "object")
             if ref is not None:
                 impostor = self._ref(ref)
             else:
-                impostor = getattr(self, f"_{json_type}")(schema)
+                temp_schema = deepcopy(schema)
+                all_of = temp_schema.get('allOf')
+                if all_of is not None:
+                    for subschema in all_of:
+                        update(temp_schema, subschema)
+                any_of = temp_schema.get('anyOf')
+                if any_of is not None:
+                    for subschema in random.sample(any_of, random.randint(1, len(any_of) - 1)):
+                        update(temp_schema, subschema)
+                one_of = temp_schema.get('oneOf')
+                if one_of is not None:
+                    subschema_choice = random.choice(one_of)
+                    update(temp_schema, subschema_choice)
+                    remove_subschema = {}  # type: Dict[str, Any]
+                    for subschema in one_of:
+                        if subschema is not subschema_choice:
+                            update(remove_subschema, difference(subschema, subschema_choice))
+                    remove(temp_schema, remove_subschema)
+
+                json_type = temp_schema.get(u"type", "object")
+                impostor = getattr(self, f"_{json_type}")(temp_schema)
         finally:
             if scope:
                 self.resolver.pop_scope()
@@ -174,7 +247,7 @@ class JsonGenerator(object):
                             options.remove('pr')
                     elif choice == 'pa':  # make a patternProperty
                         pattern = str(random.choice(patterns))
-                        j_object = rstr.xeger(pattern)[:self.KEY_LEN]
+                        j_object = rstr.xeger(sanitize(pattern))[:self.KEY_LEN]
                         impostor[j_object] = self._gen_json(pattern_properties[pattern])
                     elif choice == 'ad':  # make an additionalProperty
                         j_object = self.faker.uuid4()
@@ -184,17 +257,16 @@ class JsonGenerator(object):
     def _number(self, schema: dict) -> Union[int, float]:
         impostor = self._common(schema)
         if impostor is None:
-            maximum = schema.get('maximum', schema.get('exclusiveMaximum', self.UNBOUND_MAX_INT) - 1)
-            minimum = schema.get('minimum', schema.get('exclusiveMinimum', self.UNBOUND_MIN_INT) + 1)
+            maximum = schema.get('maximum', (schema.get('exclusiveMaximum', self.UNBOUND_MAX_INT) - 1))
+            minimum = schema.get('minimum', (schema.get('exclusiveMinimum', self.UNBOUND_MIN_INT) + 1))
             if minimum == maximum:
                 impostor = minimum
             else:
-                multiple_of = schema.get('multipleOf', 1)
                 if isinstance(maximum, float) or isinstance(minimum, float) or isinstance(minimum, float):
                     impostor = self.faker.random.uniform(minimum, maximum)
                 else:
                     impostor = self.faker.random_int(minimum, maximum)
-                impostor = impostor // multiple_of * multiple_of
+                impostor = impostor - (impostor % schema.get('multipleOf', 1))
         return impostor
 
     def _integer(self, schema: dict) -> int:
@@ -206,8 +278,7 @@ class JsonGenerator(object):
                 impostor = minimum
             else:
                 impostor = self.faker.random_int(minimum, maximum)
-                multiple_of = schema.get('multipleOf', 1)
-                impostor = max(minimum, impostor // multiple_of * multiple_of)
+                impostor = impostor - (impostor % schema.get('multipleOf', 1))
         return impostor
 
     def _string(self, schema: dict) -> str:
