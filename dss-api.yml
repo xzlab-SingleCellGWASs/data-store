@@ -6,7 +6,7 @@ info:
 host: {{API_HOST}}
 schemes:
   - https
-basePath: /v1
+basePath: {{API_PREFIX}}v1
 produces:
   - application/json
 securityDefinitions:
