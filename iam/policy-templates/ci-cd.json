@@ -69,6 +69,7 @@
       "Action": [
         "lambda:List*",
         "lambda:GetEventSourceMapping",
+        "lambda:CreateEventSourceMapping",
         "lambda:TagResource",
         "apigateway:*"
       ],
