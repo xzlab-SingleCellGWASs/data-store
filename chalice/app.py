@@ -25,6 +25,9 @@ from dss import BucketConfig, Config, DeploymentStage, create_app
 from dss.util import paginate
 
 
+logger = logging.getLogger(__name__)
+
+
 Config.set_config(BucketConfig.NORMAL)
 
 
@@ -153,6 +156,15 @@ def get_chalice_app(flask_app) -> DSSChaliceApp:
         res_headers = dict(flask_res.headers)
         # API Gateway/Cloudfront adds a duplicate Content-Length with a different value (not sure why)
         res_headers.pop("Content-Length", None)
+        log_line = "%s %s %s \"%s %s\" %d".format(
+            app.current_request.remote_addr,
+            app.current_request.token_info['email'],
+            datetime.datetime.utcnow().strftime("%Y-%m-%dT%H%M%S.%fZ"),
+            app.current_request.method,
+            path,
+            flask_res._status_code
+        )
+        logger.info(log_line)
         return chalice.Response(status_code=flask_res._status_code,
                                 headers=res_headers,
                                 body="".join([c.decode() if isinstance(c, bytes) else c for c in flask_res.response]))
