@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from enum import Enum, EnumMeta, auto
 
 import boto3
+import botocore.config
 from cloud_blobstore import BlobStore
 from cloud_blobstore.s3 import S3BlobStore
 from cloud_blobstore.gs import GSBlobStore
@@ -94,6 +95,10 @@ class Config:
     _S3_CHECKOUT_BUCKET = None  # type: typing.Optional[str]
     _GS_CHECKOUT_BUCKET = None  # type: typing.Optional[str]
 
+    S3_CONNECT_TIMEOUT = 5  # type: float
+    S3_READ_TIMEOUT = 5  # type: float
+    S3_RETRIES = 2  # type: int
+
     _ALLOWED_EMAILS = None  # type: typing.Optional[str]
     _CURRENT_CONFIG = BucketConfig.ILLEGAL  # type: BucketConfig
     _NOTIFICATION_SENDER_EMAIL = None  # type: typing.Optional[str]
@@ -110,7 +115,14 @@ class Config:
     @functools.lru_cache()
     def get_native_handle(replica: "Replica") -> typing.Any:
         if replica == Replica.aws:
-            return boto3.client("s3")
+            return boto3.client(
+                "s3",
+                config=botocore.config.Config(
+                    connect_timeout=Config.S3_CONNECT_TIMEOUT,
+                    read_timeout=Config.S3_READ_TIMEOUT,
+                    retries={'max_attempts': Config.S3_RETRIES}
+                )
+            )
         elif replica == Replica.gcp:
             credentials = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
             return Client.from_service_account_json(credentials)
