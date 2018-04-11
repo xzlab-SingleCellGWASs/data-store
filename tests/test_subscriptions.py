@@ -7,6 +7,8 @@ import os
 import sys
 import unittest
 import uuid
+
+import time
 from io import open
 from contextlib import contextmanager
 
@@ -202,6 +204,7 @@ class TestSubscriptionsBase(ElasticsearchTestCase, DSSAssertMixin):
             headers=get_auth_header()
         )
         uuid_ = resp_obj.json['uuid']
+        time.sleep(1)
         return uuid_
 
     @contextmanager

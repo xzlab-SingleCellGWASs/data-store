@@ -331,7 +331,7 @@ class BundleDocument(IndexDocument):
         Remove this document from each given index provided that it contains the given version of this document.
         """
         es_client = ElasticsearchClient.get()
-        num_ok, errors = bulk(es_client, raise_on_error=False, actions=[{
+        num_ok, errors = bulk(es_client, raise_on_error=False, refresh=True, actions=[{
             '_op_type': 'delete',
             '_index': index_name,
             '_type': ESDocType.doc.name,
@@ -363,7 +363,7 @@ class BundleDocument(IndexDocument):
 
         if subscription_queries:
             try:
-                bulk(es_client, iter(subscription_queries), refresh=True)
+                bulk(es_client, iter(subscription_queries), refresh='wait_for')
             except BulkIndexError as ex:
                 logger.error(f"Error occurred when adding subscription queries "
                              f"to index {index_name} Errors: {ex.errors}")

@@ -179,7 +179,7 @@ def _unregister_percolate(es_client: Elasticsearch, subscribed_indexes: List[str
                                          doc_type=ESDocType.query.name,
                                          body={"query": {"ids": {"type": ESDocType.query.name, "values": [uuid]}}},
                                          conflicts="proceed",
-                                         refresh=True)
+                                         refresh='wait_for')
     if response['failures']:
         logger.error("Failed to unregister percolate query for subscription %s: %s", uuid, response)
 
@@ -189,7 +189,7 @@ def _register_percolate(es_client: Elasticsearch, index_name: str, uuid: str, es
                            doc_type=ESDocType.query.name,
                            id=uuid,
                            body=es_query,
-                           refresh=True)
+                           refresh='wait_for')
 
 
 def _register_subscription(es_client: Elasticsearch, uuid: str, json_request_body: dict, replica: str):
@@ -197,8 +197,7 @@ def _register_subscription(es_client: Elasticsearch, uuid: str, json_request_bod
     return es_client.index(index=index_name,
                            doc_type=ESDocType.subscription.name,
                            id=uuid,
-                           body=json_request_body,
-                           refresh=True)
+                           body=json_request_body)
 
 
 def _get_indexes_by_alias(es_client: Elasticsearch, alias_name: str):

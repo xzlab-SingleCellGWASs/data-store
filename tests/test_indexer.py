@@ -944,6 +944,7 @@ class TestIndexerBase(ElasticsearchTestCase, DSSAssertMixin, DSSStorageMixin, DS
             headers=get_auth_header()
         )
         uuid_ = resp_obj.json['uuid']
+        time.sleep(1)
         return uuid_
 
     def verify_index_document_structure_and_content(self, actual_index_document,
