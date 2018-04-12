@@ -53,6 +53,12 @@ class TestConfig(unittest.TestCase):
             self.assertFalse(None in prop_vals)
             self.assertEqual(len(Replica), len(prop_vals))
 
+    def test_boto_s3_config(self):
+        client_config = Config.get_blobstore_handle(Replica.aws).s3_client._client_config
+        self.assertEqual(Config.S3_CONNECT_TIMEOUT, client_config.connect_timeout)
+        self.assertEqual(Config.S3_READ_TIMEOUT, client_config.read_timeout)
+        self.assertEqual(Config.S3_RETRIES, client_config.retries['max_attempts'])
+
 
 if __name__ == '__main__':
     unittest.main()
