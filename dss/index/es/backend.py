@@ -11,13 +11,18 @@ from dss.index.bundle import Bundle, Tombstone
 from dss.notify.notification import Notification
 from dss.notify.notifier import Notifier
 
-from . import elasticsearch_retry, ElasticsearchClient, TIME_NEEDED
+from . import elasticsearch_retry, ElasticsearchClient
 from .document import BundleDocument, BundleTombstoneDocument
 
 logger = logging.getLogger(__name__)
 
 
 class ElasticsearchIndexBackend(IndexBackend):
+
+    timeout = 10.0
+
+    def estimate_indexing_time(self) -> float:
+        return self.timeout
 
     def __init__(self, notify_async: bool = None, *args, **kwargs) -> None:
         """
@@ -29,18 +34,16 @@ class ElasticsearchIndexBackend(IndexBackend):
             notify_async = Config.notification_is_async()
         self.notifier = Notifier.from_config() if notify_async else None
 
-    @elasticsearch_retry(logger)
+    @elasticsearch_retry(logger, timeout)
     def index_bundle(self, bundle: Bundle):
-        self._is_enough_time()
         elasticsearch_retry.add_context(bundle=bundle)
         doc = BundleDocument.from_bundle(bundle)
         modified, index_name = doc.index(dryrun=self.dryrun)
         if self.notify or modified and self.notify is None:
             self._notify(doc, index_name)
 
-    @elasticsearch_retry(logger)
+    @elasticsearch_retry(logger, timeout)
     def remove_bundle(self, bundle: Bundle, tombstone: Tombstone):
-        self._is_enough_time()
         elasticsearch_retry.add_context(tombstone=tombstone, bundle=bundle)
         doc = BundleDocument.from_bundle(bundle)
         tombstone_doc = BundleTombstoneDocument.from_tombstone(tombstone)
@@ -150,7 +153,3 @@ class ElasticsearchIndexBackend(IndexBackend):
         else:
             logger.info(f"Synchronously sending notification {notification} about bundle {doc.fqid}")
             notification.deliver_or_raise()
-
-    def _is_enough_time(self):
-        if self.context.get_remaining_time_in_millis() / 1000 <= TIME_NEEDED:
-            raise RuntimeError("Not enough time to complete indexing operation.")
