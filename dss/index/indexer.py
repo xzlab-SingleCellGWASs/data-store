@@ -14,6 +14,9 @@ from .bundle import Bundle, Tombstone
 logger = logging.getLogger(__name__)
 
 
+class IndexerTimeout(RuntimeError):
+    pass
+
 class Indexer(metaclass=ABCMeta):
 
     def __init__(self, backend: IndexBackend, context: LambdaContext) -> None:
@@ -83,8 +86,10 @@ class Indexer(metaclass=ABCMeta):
         return remaining_time
 
     def _is_enough_time(self, num_operations):
-        if self.remaining_time < num_operations * self.backend.estimate_indexing_time():
-            raise RuntimeError("Not enough time to complete all indexing operations.")
+        remaining_time = self.remaining_time
+        time_needed = num_operations * self.backend.estimate_indexing_time()
+        if remaining_time < time_needed:
+            raise IndexerTimeout(f"Not enough time to complete indexing ({remaining_time} < {time_needed}).")
 
     replica: Optional[Replica] = None  # required in concrete subclasses
 

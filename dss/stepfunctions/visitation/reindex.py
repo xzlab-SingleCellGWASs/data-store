@@ -9,7 +9,7 @@ from cloud_blobstore import BlobPagingError
 from dss.config import Config, Replica
 from dss.index import DEFAULT_BACKENDS
 from dss.index.backend import CompositeIndexBackend
-from dss.index.indexer import Indexer
+from dss.index.indexer import Indexer, IndexerTimeout
 from . import Visitation, WalkerStatus
 
 logger = logging.getLogger(__name__)
@@ -44,16 +44,6 @@ class Reindex(Visitation):
         else:
             self.work_ids = [a + b for a in prefix_chars for b in prefix_chars]
 
-    def process_item(self, indexer, key):
-        self.work_result['processed'] += 1
-        try:
-            indexer.index_object(key)
-        except Exception:
-            self.work_result['failed'] += 1
-            logger.warning(f'Reindex operation failed for {key}', exc_info=True)
-        else:
-            self.work_result['indexed'] += 1
-
     def walker_finalize(self):
         logger.info(f'Work result: {self.work_result}')
         self.marker = None
@@ -83,10 +73,21 @@ class Reindex(Visitation):
             for key in blobs:
                 # Timing out while recording paging info could cause an inconsistent paging state, leading to repeats
                 # of large amounts of work. This can be avoided by checking for timeouts only during actual
-                # re-indexing. The indexer will perform this checking for every item.
-                self.process_item(indexer, key)
-                self.marker = blobs.start_after_key
-                self.token = blobs.token
+                # re-indexing. The indexer performs this check for every item.
+                self.work_result['processed'] += 1
+                try:
+                    indexer.index_object(key)
+                except IndexerTimeout as e:
+                    self.work_result['failed'] += 1
+                    logger.warning(f'{self.work_id} timed out during reindex: {e}')
+                    break
+                except Exception:
+                    self.work_result['failed'] += 1
+                    logger.warning(f'Reindex operation failed for {key}', exc_info=True)
+                else:
+                    self.work_result['indexed'] += 1
+                    self.marker = blobs.start_after_key
+                    self.token = blobs.token
             else:
                 self._status = WalkerStatus.finished.name
         finally:
