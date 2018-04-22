@@ -103,3 +103,8 @@ class TombstoneID(ObjectIdentifier):
             return BundleFQID(uuid=self.uuid, version=self.version)
         else:
             raise ValueError(f"{self} does not define a version, therefore it can't be a Bundle FQID.")
+
+
+FILE_BUNDLE_REF_PREFIX = "files-by-bundle"
+def file_bundle_reference_key(bundle_fqid: BundleFQID, file_fqid: FileFQID) -> str:
+    return f"{FILE_BUNDLE_REF_PREFIX}/{bundle_fqid}>{file_fqid}"

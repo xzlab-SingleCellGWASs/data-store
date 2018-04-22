@@ -1,7 +1,7 @@
 import json
 import typing
 
-from cloud_blobstore import BlobNotFoundError
+from cloud_blobstore import BlobStore, BlobNotFoundError
 
 from dss import Config, DSSException, Replica
 from dss.storage.hcablobstore import BundleFileMetadata, BundleMetadata
@@ -36,14 +36,7 @@ def get_bundle_from_bucket(
     # handle the following deletion case
     # 3. no version is specified, we want the latest _non-deleted_ version
     if version is None:
-        # list the files and find the one that is the most recent.
-        prefix = f"bundles/{uuid}."
-        object_names = handle.list(bucket, prefix)
-        version = _latest_version_from_object_names(object_names)
-
-    if version is None:
-        # no matches!
-        raise DSSException(404, "not_found", "Cannot find file!")
+        version = latest_version(handle, bucket, uuid)
 
     bundle_fqid = BundleFQID(uuid=uuid, version=version)
 
@@ -92,6 +85,15 @@ def get_bundle_from_bucket(
             creator_uid=bundle_metadata[BundleMetadata.CREATOR_UID],
         )
     )
+
+def latest_version(handle: BlobStore, bucket: str, uuid: str):
+    # list the files and find the one that is the most recent.
+    prefix = f"bundles/{uuid}."
+    object_names = handle.list(bucket, prefix)
+    return _latest_version_from_object_names(object_names)
+
+    # no matches!
+    raise DSSException(404, "not_found", "Cannot find file!")
 
 
 def _latest_version_from_object_names(object_names: typing.Iterator[str]) -> str:

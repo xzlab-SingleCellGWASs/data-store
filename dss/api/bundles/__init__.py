@@ -11,9 +11,15 @@ import requests
 from cloud_blobstore import BlobNotFoundError, BlobStore
 from flask import jsonify, request
 
-from dss.storage.identifiers import TombstoneID, BundleFQID, FileFQID
+from dss.storage.identifiers import (
+    TombstoneID,
+    BundleFQID,
+    FileFQID,
+    file_bundle_reference_key,
+    FILE_BUNDLE_REF_PREFIX,
+)
 from dss.storage.blobstore import test_object_exists, ObjectTest
-from dss.storage.bundles import get_bundle
+from dss.storage.bundles import get_bundle, latest_version
 from dss.util.version import datetime_to_version_format
 from dss import DSSException, dss_handler
 from dss.config import Config, Replica
@@ -98,8 +104,6 @@ def put(uuid: str, replica: str, json_request_body: dict, version: str = None):
             f"Could not find file {missing_file_user_metadata['uuid']}/{missing_file_user_metadata['version']}."
         )
 
-    # TODO: (ttung) should validate the files' bundle UUID points back at us.
-
     # build a manifest consisting of all the files.
     bundle_metadata = {
         BundleMetadata.FORMAT: BundleMetadata.FILE_FORMAT_VERSION,
@@ -137,6 +141,20 @@ def put(uuid: str, replica: str, json_request_body: dict, version: str = None):
         )
     status_code = requests.codes.created if created else requests.codes.ok
 
+    bundle_fqid = BundleFQID(uuid=uuid, version=version)
+    for file_manifest in bundle_metadata[BundleMetadata.FILES]:
+        handle.upload_file_handle(
+            bucket,
+            file_bundle_reference_key(
+                bundle_fqid,
+                FileFQID(
+                    uuid=file_manifest[BundleFileMetadata.UUID],
+                    version=file_manifest[BundleFileMetadata.VERSION]
+                )
+            ),
+            io.BytesIO(b'')
+        )
+
     return jsonify(dict(version=version)), status_code
 
 
@@ -166,6 +184,11 @@ def delete(uuid: str, replica: str, json_request_body: dict, version: str=None):
     bucket = Replica[replica].bucket
 
     if test_object_exists(handle, bucket, bundle_prefix, test_type=ObjectTest.PREFIX):
+        try:
+            bundle_metadata = get_bundle(uuid, Replica[replica], version)['bundle']
+        except DSSException as e:
+            bundle_metadata = None
+
         created, idempotent = _idempotent_save(
             handle,
             bucket,
@@ -178,6 +201,20 @@ def delete(uuid: str, replica: str, json_request_body: dict, version: str=None):
                 f"bundle_tombstone_already_exists",
                 f"bundle tombstone with UUID {uuid} and version {version} already exists",
             )
+
+        if bundle_metadata is not None:
+            bundle_fqid = BundleFQID(
+                uuid=uuid,
+                version=bundle_metadata[BundleMetadata.VERSION]
+            )
+            if version is None:
+                prefix = f"{FILE_BUNDLE_REF_PREFIX}/{bundle_fqid.uuid}"
+            else:
+                prefix = f"{FILE_BUNDLE_REF_PREFIX}/{bundle_fqid}"
+
+            for key in handle.list(bucket, prefix=prefix):
+                handle.delete(bucket, key)
+
         status_code = requests.codes.ok
         response_body = dict()  # type: dict
     else:
